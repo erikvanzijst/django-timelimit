@@ -4,7 +4,7 @@ from django import template
 from django.template import NodeList, Node, TemplateSyntaxError
 from django.template.defaulttags import register
 
-from interruptingcow import timeout
+from interruptingcow import timeout, StateException
 
 register = template.Library()
 
@@ -59,6 +59,12 @@ class TimeoutNode(Node):
         try:
             with timeout(self.interval.resolve(context), Interrupted):
                 return self.nodelist_timeout.render(context)
+        except StateException:
+            # StateException is raised by interruptingcow if its not running
+            # on the MainThread. Since not all webservers process requests
+            # on the main thread (e.g. Django's own `runserver` command), we
+            # swallow the exception and just continue without interruptingcow.
+            return self.nodelist_timeout.render(context)
         except Interrupted:
             return self.nodelist_else.render(context)
 
